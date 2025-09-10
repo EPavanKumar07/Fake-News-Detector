@@ -1,0 +1,70 @@
+from google.colab import files
+uploaded = files.upload()
+import pandas as pd
+df_fake = pd.read_csv('Fake.csv')
+df_real = pd.read_csv('True.csv')
+df_fake['label'] = 'FAKE'
+df_real['label'] = 'REAL'
+df_merged = pd.concat([df_fake, df_real], ignore_index=True)
+df_merged.to_csv('merged_news.csv', index=False)
+#Data Preprocessing
+import nltk
+from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import TfidfVectorizer
+nltk.download('stopwords')
+def clean_text(text):
+    text = text.lower()
+    text = ''.join([char for char in text if char.isalpha() or char.isspace()])
+    return text
+df_merged['cleaned_text'] = df_merged['text'].apply(clean_text)
+stop_words = set(stopwords.words('english'))
+df_merged['cleaned_text'] = df_merged['cleaned_text'].apply(lambda x: ' '.join([word for word in x.split() if word not in stop_words]))
+vectorizer = TfidfVectorizer(max_df=0.7)
+X = vectorizer.fit_transform(df_merged['cleaned_text'])
+import matplotlib.pyplot as plt
+import numpy as np
+feature_names = vectorizer.get_feature_names_out()
+sum_tfidf = np.asarray(X.sum(axis=0)).flatten()
+feature_scores = zip(feature_names, sum_tfidf)
+sorted_features = sorted(feature_scores, key=lambda x: x[1], reverse=True)
+top_n = 20
+top_features = sorted_features[:top_n]
+words = [x[0] for x in top_features]
+scores = [x[1] for x in top_features]
+plt.figure(figsize=(10, 6))
+plt.barh(words, scores, color='skyblue')
+plt.xlabel('TF-IDF Score')
+plt.title('Top {} Important Words Based on TF-IDF Scores'.format(top_n))
+plt.gca().invert_yaxis()
+plt.show()
+from sklearn.preprocessing import LabelEncoder
+label_encoder = LabelEncoder()
+y = label_encoder.fit_transform(df_merged['label'])
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+import matplotlib.pyplot as plt
+train_size = X_train.shape[0]
+test_size = X_test.shape[0]
+labels = ['Training Set', 'Test Set']
+sizes = [train_size, test_size]
+plt.figure(figsize=(7, 5))
+plt.bar(labels, sizes, color=['skyblue', 'lightcoral'])
+plt.ylabel('Number of Samples')
+plt.title('Train-Test Split')
+plt.show()
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy * 100:.2f}%")
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import ConfusionMatrixDisplay
+ConfusionMatrixDisplay(confusion_matrix=confusion_matrix(y_test, y_pred), display_labels=['FAKE', 'REAL']).plot(cmap='Blues')
+plt.show()
